@@ -158,6 +158,13 @@ static void microbit_ble_configureAdvertising( bool connectable, bool discoverab
                                                uint8_t *frameData, uint16_t frameSize);
 #endif
 
+static uint8_t p_data[BLE_GAP_SCAN_BUFFER_EXTENDED_MIN];
+
+static ble_data_t adv_report_buffer = {
+    p_data,
+    BLE_GAP_SCAN_BUFFER_EXTENDED_MIN
+};
+
 
 /**
  * Constructor.
@@ -478,13 +485,14 @@ void MicroBitBLEManager::init( ManagedString deviceName, ManagedString serialNum
 
     MICROBIT_DEBUG_DMESG("Setting up scan parameters...");
     ble_gap_scan_params_t scan_params;
+    memset(&scan_params, 0, sizeof(scan_params));
     scan_params.extended = 0x00;
     scan_params.active = 0x01;
-    scan_params.filter_policy = BLE_GAP_SCAN_FP_ACCEPT_ALL;
+    scan_params.filter_policy = 0x00;
     scan_params.scan_phys = BLE_GAP_PHY_1MBPS;
     scan_params.interval = 0x0040;
     scan_params.window = 0x0020;
-    scan_params.timeout = BLE_GAP_SCAN_TIMEOUT_UNLIMITED;
+    scan_params.timeout = BLE_GAP_SCAN_TIMEOUT_MIN;
     
     for(int i = 0; i < 5; i++)
     {
@@ -492,10 +500,6 @@ void MicroBitBLEManager::init( ManagedString deviceName, ManagedString serialNum
     }
 
     MICROBIT_DEBUG_DMESG("Scan parameters setup complete");
-
-    ble_data_t adv_report_buffer;
-
-    adv_report_buffer.len = BLE_GAP_SCAN_BUFFER_MAX;
 
     uint32_t scan_error = sd_ble_gap_scan_start(&scan_params, &adv_report_buffer);
 
