@@ -468,7 +468,31 @@ void MicroBitBLEManager::init( ManagedString deviceName, ManagedString serialNum
                                        MICROBIT_BLE_ADVERTISING_INTERVAL, MICROBIT_BLE_ADVERTISING_TIMEOUT);
 
     // Configure the radio at our default power level
-    setTransmitPower( MICROBIT_BLE_DEFAULT_TX_POWER);
+    //setTransmitPower( MICROBIT_BLE_DEFAULT_TX_POWER);
+
+    uint32_t tx_power_error = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_SCAN_INIT, NULL, 8);
+
+    MICROBIT_DEBUG_DMESG("TX ERROR CODE: %d", tx_power_error);
+
+    MICROBIT_DEBUG_DMESG("Setting up scan parameters...");
+    ble_gap_scan_params_t scan_params;
+    scan_params.extended = 0x1;
+    scan_params.active = 0x1;
+    scan_params.filter_policy = BLE_GAP_SCAN_FP_ACCEPT_ALL;
+    scan_params.scan_phys = BLE_GAP_PHY_1MBPS;
+    scan_params.interval = 160;
+    scan_params.window = 80;
+    scan_params.timeout = 0x0000;
+
+    MICROBIT_DEBUG_DMESG("Scan parameters setup complete");
+
+    ble_data_t adv_report_buffer;
+
+    adv_report_buffer.len = BLE_GAP_SCAN_BUFFER_EXTENDED_MIN;
+
+    uint32_t error_code = sd_ble_gap_scan_start(&scan_params, &adv_report_buffer);
+
+    MICROBIT_DEBUG_DMESG("Error Code: %d", error_code);
 
     ble_conn_params_init_t cp_init;
     memset(&cp_init, 0, sizeof(cp_init));
@@ -488,7 +512,7 @@ void MicroBitBLEManager::init( ManagedString deviceName, ManagedString serialNum
 #if CONFIG_ENABLED(MICROBIT_BLE_WHITELIST)
     if ( getBondCount() > 0)
 #endif
-        advertise();
+        //advertise();
 
     this->status |= DEVICE_COMPONENT_RUNNING;
 }
