@@ -488,7 +488,7 @@ void MicroBitBLEManager::init( ManagedString deviceName, ManagedString serialNum
 #if CONFIG_ENABLED(MICROBIT_BLE_WHITELIST)
     if ( getBondCount() > 0)
 #endif
-        advertise();
+        //advertise();
 
     this->status |= DEVICE_COMPONENT_RUNNING;
 }
