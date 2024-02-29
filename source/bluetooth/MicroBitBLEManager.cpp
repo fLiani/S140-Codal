@@ -257,7 +257,7 @@ void MicroBitBLEManager::init( ManagedString deviceName, ManagedString serialNum
     nrf_sdh_soc_init();
   
     // Start the BLE stack.
-    uint32_t ram_start = 0x20002440;
+    uint32_t ram_start = 0x20002450;
     MICROBIT_BLE_ECHK( nrf_pwr_mgmt_init());
     MICROBIT_BLE_ECHK( nrf_sdh_enable_request());
     MICROBIT_BLE_ECHK( nrf_sdh_ble_default_cfg_set( microbit_ble_CONN_CFG_TAG, &ram_start));
