@@ -117,6 +117,10 @@ const char *MICROBIT_BLE_SOFTWARE_VERSION = NULL;
 
 const int8_t MICROBIT_BLE_POWER_LEVEL[] = { -40, -20, -16, -12, -8, -4, 0, 4};
 
+static char const target_name[] = "BBC micro:bit [zogep]";
+
+int counter = 0;
+
 /*
  * Many of the interfaces we need to use only support callbacks to plain C functions, rather than C++ methods.
  * So, we maintain a pointer to the MicroBitBLEManager that's in use. Ths way, we can still access resources on the micro:bit
@@ -136,6 +140,32 @@ static volatile int         m_pending;
 
 NRF_BLE_GATT_DEF( m_gatt);
 
+static ble_gap_scan_params_t scan_params =
+{
+    .extended = 0x00,
+    .active = 0x01,
+    .filter_policy = 0x00,
+    .scan_phys = BLE_GAP_PHY_1MBPS,
+    .interval = 0x0040,
+    .window = 0x0020,
+    .timeout = BLE_GAP_SCAN_TIMEOUT_MIN,
+    .channel_mask = {0x00, 0x00, 0x00, 0x00, 0x00},
+};
+
+static ble_gap_conn_params_t gap_conn_params =
+{
+    .min_conn_interval = 8,
+    .max_conn_interval = 16,
+    .slave_latency     = 0,
+    .conn_sup_timeout  = 400,
+};
+
+static uint8_t p_data[BLE_GAP_SCAN_BUFFER_EXTENDED_MIN];
+
+static ble_data_t adv_report_buffer = {
+    p_data,
+    BLE_GAP_SCAN_BUFFER_EXTENDED_MIN
+};
 
 static void const_ascii_to_utf8(ble_srv_utf8_str_t * p_utf8, const char * p_ascii);
 
@@ -277,7 +307,11 @@ void MicroBitBLEManager::init( ManagedString deviceName, ManagedString serialNum
     ble_cfg.gap_cfg.device_name_cfg.p_value     = (uint8_t *)gapName.toCharArray();
     ble_cfg.gap_cfg.device_name_cfg.current_len = gapName.length();
     ble_cfg.gap_cfg.device_name_cfg.max_len     = gapName.length();
-    MICROBIT_BLE_ECHK( sd_ble_cfg_set( BLE_GAP_CFG_DEVICE_NAME, &ble_cfg, ram_start));
+
+    ble_cfg.conn_cfg.params.gap_conn_cfg.conn_count = 5;
+    ble_cfg.conn_cfg.params.gap_conn_cfg.event_length = NRF_SDH_BLE_GAP_EVENT_LENGTH;
+
+    MICROBIT_BLE_ECHK( sd_ble_cfg_set(BLE_CONN_CFG_GAP, &ble_cfg, ram_start));
 
     MICROBIT_BLE_ECHK( nrf_sdh_ble_enable(&ram_start));
     NRF_SDH_BLE_OBSERVER( microbit_ble_observer, microbit_ble_OBSERVER_PRIO, microbit_ble_evt_handler, NULL);
@@ -375,12 +409,12 @@ void MicroBitBLEManager::init( ManagedString deviceName, ManagedString serialNum
 
     // Set up GAP
     // Configure for high speed mode where possible.
-    ble_gap_conn_params_t   gap_conn_params;
-    memset(&gap_conn_params, 0, sizeof(gap_conn_params));
-    gap_conn_params.min_conn_interval = 8;      // 10 ms
-    gap_conn_params.max_conn_interval = 16;     // 20 ms
-    gap_conn_params.slave_latency     = 0;
-    gap_conn_params.conn_sup_timeout  = 400;    // 4s
+    // ble_gap_conn_params_t   gap_conn_params;
+    // memset(&gap_conn_params, 0, sizeof(gap_conn_params));
+    // gap_conn_params.min_conn_interval = 8;      // 10 ms
+    // gap_conn_params.max_conn_interval = 16;     // 20 ms
+    // gap_conn_params.slave_latency     = 0;
+    // gap_conn_params.conn_sup_timeout  = 400;    // 4s
     MICROBIT_BLE_ECHK( sd_ble_gap_ppcp_set( &gap_conn_params));
     
     // Set up GATT
@@ -464,11 +498,20 @@ void MicroBitBLEManager::init( ManagedString deviceName, ManagedString serialNum
     servicesChanged();
     
     // Setup advertising.
-    microbit_ble_configureAdvertising( connectable, discoverable, whitelist,
-                                       MICROBIT_BLE_ADVERTISING_INTERVAL, MICROBIT_BLE_ADVERTISING_TIMEOUT);
+    //microbit_ble_configureAdvertising( connectable, discoverable, whitelist,
+                                       //MICROBIT_BLE_ADVERTISING_INTERVAL, MICROBIT_BLE_ADVERTISING_TIMEOUT);
 
     // Configure the radio at our default power level
-    setTransmitPower( MICROBIT_BLE_DEFAULT_TX_POWER);
+    //setTransmitPower( MICROBIT_BLE_DEFAULT_TX_POWER);
+
+    uint32_t tx_power_error = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_SCAN_INIT, NULL, 8);
+
+    MICROBIT_DEBUG_DMESG("TX ERROR CODE: %d\r\n", tx_power_error);
+    
+    // for(int i = 0; i < 5; i++)
+    // {
+    //     scan_params.channel_mask[i] = channel_mask[i];
+    // }
 
     ble_conn_params_init_t cp_init;
     memset(&cp_init, 0, sizeof(cp_init));
@@ -481,6 +524,12 @@ void MicroBitBLEManager::init( ManagedString deviceName, ManagedString serialNum
     MICROBIT_BLE_ECHK( ble_conn_params_init(&cp_init));
 
     setAdvertiseOnDisconnect( true);
+
+    sd_ble_gap_scan_stop();
+
+    uint32_t scan_error = sd_ble_gap_scan_start(&scan_params, &adv_report_buffer);
+
+    MICROBIT_DEBUG_DMESG("SCAN ERROR CODE: %d\r\n", scan_error);
 
 // If we have whitelisting enabled, then prevent only enable advertising of we have any binded devices...
 // This is to further protect kids' privacy. If no-one initiates BLE, then the device is unreachable.
@@ -1274,6 +1323,20 @@ static void passkeyDisplayCallback( microbit_gaphandle_t handle, ManagedString p
         MicroBitBLEManager::manager->pairingRequested(passKey);
 }
 
+static void on_adv_report(ble_gap_evt_adv_report_t const * p_adv_report)
+{
+    MICROBIT_DEBUG_DMESG("Advertisement");
+    if(ble_advdata_name_find(p_adv_report->data.p_data, p_adv_report->data.len, target_name))
+    {
+        volatile uint32_t *d = (uint32_t *) 0x50000514;
+        volatile uint32_t *p = (uint32_t *) 0x50000504;
+        *d = 4;
+        *p = 4;
+        uint32_t connect_error = sd_ble_gap_connect(&p_adv_report->peer_addr, &scan_params, &gap_conn_params, microbit_ble_CONN_CFG_TAG);
+        MICROBIT_DEBUG_DMESG("Connected, ERROR CODE: %d", connect_error);
+    }
+}
+
 // NOTE: Event handlers may be called from SD_EVT_IRQHandler
 // TODO: Check what they call. Consider other dispatch modes
 
@@ -1284,7 +1347,7 @@ static void microbit_ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_conte
 {
     MICROBIT_DEBUG_DMESG( "%d:microbit_ble_evt_handler %x %d", (int)system_timer_current_time(), (unsigned int) p_ble_evt->header.evt_id);
 
-    MICROBIT_DEBUG_DMESG("%x", p_ble_evt->evt.gap_evt.params.adv_report);
+    ble_gap_evt_t const * p_gap_evt = &p_ble_evt->evt.gap_evt;
     
     switch (p_ble_evt->header.evt_id)
     {
@@ -1298,6 +1361,11 @@ static void microbit_ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_conte
         {
             MICROBIT_DEBUG_DMESG( "BLE_GAP_EVT_CONNECTED %d", ble_conn_state_conn_count());
             bleConnectionCallback( p_ble_evt->evt.gap_evt.conn_handle);
+            break;
+        }
+        case BLE_GAP_EVT_ADV_REPORT:
+        {
+            on_adv_report(&p_gap_evt->params.adv_report);
             break;
         }
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
