@@ -167,6 +167,8 @@ static ble_data_t adv_report_buffer = {
     BLE_GAP_SCAN_BUFFER_EXTENDED_MIN
 };
 
+static uint32_t ram_start = (uint32_t) 0x20003050;
+
 static void const_ascii_to_utf8(ble_srv_utf8_str_t * p_utf8, const char * p_ascii);
 
 static void microbit_ble_for_each_connected_disconnect( uint16_t conn_handle, void *p_context);
@@ -287,7 +289,6 @@ void MicroBitBLEManager::init( ManagedString deviceName, ManagedString serialNum
     nrf_sdh_soc_init();
   
     // Start the BLE stack.
-    uint32_t ram_start = 0x20002450;
     MICROBIT_BLE_ECHK( nrf_pwr_mgmt_init());
     MICROBIT_BLE_ECHK( nrf_sdh_enable_request());
     MICROBIT_BLE_ECHK( nrf_sdh_ble_default_cfg_set( microbit_ble_CONN_CFG_TAG, &ram_start));
@@ -300,18 +301,16 @@ void MicroBitBLEManager::init( ManagedString deviceName, ManagedString serialNum
         ManagedString namePostfix("]");
         gapName = gapName + namePrefix + deviceName + namePostfix;
     }
-    ble_cfg_t ble_cfg;
-    memset(&ble_cfg, 0, sizeof(ble_cfg));
-    BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS( &ble_cfg.gap_cfg.device_name_cfg.write_perm);
-    ble_cfg.gap_cfg.device_name_cfg.vloc        = BLE_GATTS_VLOC_USER;
-    ble_cfg.gap_cfg.device_name_cfg.p_value     = (uint8_t *)gapName.toCharArray();
-    ble_cfg.gap_cfg.device_name_cfg.current_len = gapName.length();
-    ble_cfg.gap_cfg.device_name_cfg.max_len     = gapName.length();
+    // ble_cfg_t ble_cfg;
+    // memset(&ble_cfg, 0, sizeof(ble_cfg));
+    // BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS( &ble_cfg.gap_cfg.device_name_cfg.write_perm);
+    // ble_cfg.gap_cfg.device_name_cfg.vloc        = BLE_GATTS_VLOC_USER;
+    // ble_cfg.gap_cfg.device_name_cfg.p_value     = (uint8_t *)gapName.toCharArray();
+    // ble_cfg.gap_cfg.device_name_cfg.current_len = gapName.length();
+    // ble_cfg.gap_cfg.device_name_cfg.max_len     = gapName.length();
 
-    ble_cfg.conn_cfg.params.gap_conn_cfg.conn_count = 5;
-    ble_cfg.conn_cfg.params.gap_conn_cfg.event_length = NRF_SDH_BLE_GAP_EVENT_LENGTH;
 
-    MICROBIT_BLE_ECHK( sd_ble_cfg_set(BLE_CONN_CFG_GAP, &ble_cfg, ram_start));
+    // MICROBIT_BLE_ECHK( sd_ble_cfg_set(BLE_CONN_CFG_GAP, &ble_cfg, ram_start));
 
     MICROBIT_BLE_ECHK( nrf_sdh_ble_enable(&ram_start));
     NRF_SDH_BLE_OBSERVER( microbit_ble_observer, microbit_ble_OBSERVER_PRIO, microbit_ble_evt_handler, NULL);
@@ -1334,6 +1333,10 @@ static void on_adv_report(ble_gap_evt_adv_report_t const * p_adv_report)
         *p = 4;
         uint32_t connect_error = sd_ble_gap_connect(&p_adv_report->peer_addr, &scan_params, &gap_conn_params, microbit_ble_CONN_CFG_TAG);
         MICROBIT_DEBUG_DMESG("Connected, ERROR CODE: %d", connect_error);
+    }
+    else
+    {
+        uint32_t scan_error = sd_ble_gap_scan_start(&scan_params, &adv_report_buffer);
     }
 }
 
